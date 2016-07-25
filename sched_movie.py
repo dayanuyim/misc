@@ -18,11 +18,11 @@ print(chr(246), chr(9786), chr(9787))
 '''
 
 # time(min) <-> string(HH:mm) =============
-def strToTime(str):
+def strToMin(str):
     h, m = str.split(':')
     return 60 * int(h) + int(m)
 
-def timeToStr(min):
+def minToStr(min):
     h = int(min/60)
     m = min - h * 60
     return "%02d:%02d" % (h, m)
@@ -42,7 +42,7 @@ class Period:
         self.__end = end
 
     def __str__(self):
-        return "%s~%s" % (timeToStr(self.begin), timeToStr(self.end))
+        return "%s~%s" % (minToStr(self.begin), minToStr(self.end))
 
     def contains(self, rhs):
         return self.begin <= rhs.begin and self.end >= rhs.end
@@ -61,7 +61,7 @@ class Movie:
         self.__period = period
 
     def __str__(self):
-        return "%s[%s~%s]" % (self.name, timeToStr(self.period.begin), timeToStr(self.period.end))
+        return "%s[%s]" % (self.name, str(self.period))
 
 class Sched:
     def __init__(self, movie=None):
@@ -70,8 +70,23 @@ class Sched:
             self.__movies.append(movie)
 
     def __str__(self):
-        txts = [str(m) for m in movies]
+        txts = [str(m) for m in self.__movies]
         return "(" + ", ".join(txts) + ")"
+
+    def __len__(self):
+        return len(self.__movies)
+
+    def __iter__(self):
+        return iter(self.__movies)
+
+    def __getitem__(self, idx):
+        return self.__movies[idx]
+
+    def __setitem__(self, idx, val):
+        self.__movies[idx] = val
+
+    def __delitem__(self, idx):
+        del self.__movies[idx]
 
     def put(self, movie):
         self.__movies.insert(0, movie)
@@ -93,37 +108,22 @@ def getMoviesText(movies):
     txts = [str(m) for m in movies]
     return ", ".join(txts)
 
-def schedHasMovie(sched, name):
-    for m in sched:
-        if m.name == name:
-            return True
-    return False
-
-def schedHasMovies(sched, names):
-    for name in names:
-        if not schedHasMovie(sched, name):
-            return False
-    return True
-
 def filterScheds(scheds, musts, min_movies):
+    min_movies = max(min_movies, len(musts))
     def cond(sched):
-        return len(sched) >= min_movies and schedHasMovies(sched, musts)
+        return len(sched) >= min_movies and sched.hasAllMovies(musts)
     return [sched for sched in scheds if cond(sched)]
 
 def printScheds(scheds):
     sn = 1
     for sched in scheds:
-        print("%d: %s" % (sn, getMoviesText(sched)))
+        print("%d: %s" % (sn, str(sched)))
         sn += 1
 
 # algo ==============================
-def putMovieToScheds(movie, scheds):
-    if not scheds:
-        return [[movie]]
-
+def putMovieToScheds(scheds, movie):
     for s in scheds:
-        s.insert(0, movie)
-    return scheds
+        s.put(movie)
 
 # return scheds, which is the collection of sched
 # a sched is a collection of movie
@@ -132,19 +132,14 @@ def pickMovies(period, movies):
 
     #no schedule
     if not movies:
-        return []
+        return [Sched()]  #empty schedule
 
-    #only movie
-    if len(movies) == 1:
-        m = movies[0]
-        if period.contains(m.period):
-            return [[m]]
-        return []
+    #not pick the first
+    sub_movies = movies[1:]
+    scheds = pickMovies(period, sub_movies)
 
-    scheds = []
+    #Or pick the first movie
     target = movies[0]
-
-    #pick the first movie
     if period.contains(target.period):
         #pick the rest 
         sub_movies = [m for m in movies if m.name != target.name]
@@ -152,13 +147,8 @@ def pickMovies(period, movies):
         sub_scheds = pickMovies(sub_period, sub_movies)
 
         #rebuild schedule
-        sub_scheds = putMovieToScheds(target, sub_scheds)
+        putMovieToScheds(sub_scheds, target)
         scheds.extend(sub_scheds)
-
-    # Or, not pick the first
-    sub_movies = movies[1:]
-    sub_scheds = pickMovies(period, sub_movies)
-    scheds.extend(sub_scheds)
 
     return scheds
 
@@ -166,7 +156,7 @@ def pickMovies(period, movies):
 def genMovies(name, duration, begins):
     movies = []
     for begin in begins:
-        begin = strToTime(begin)
+        begin = strToMin(begin)
         m = Movie(name, Period(begin, begin + duration))
         movies.append(m)
     return movies
@@ -184,9 +174,8 @@ if __name__ == '__main__':
     movies = sorted(movies, key=lambda m: m.period.begin)
     #for m in movies: print(str(m))
 
-    scheds = pickMovies(Period(0, 24*60), movies)
-    #scheds = filterScheds(scheds, {"動物方程式", "飛躍奇蹟"}, 2)
-    scheds = filterScheds(scheds, {"動物方程式", "飛躍奇蹟"}, 2)
+    scheds = pickMovies(Period(0, 26*60), movies)
+    scheds = filterScheds(scheds, {"動物方程式", "飛躍奇蹟"}, 4)
     printScheds(scheds)
 
 
